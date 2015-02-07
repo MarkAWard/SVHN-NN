@@ -8,9 +8,25 @@
 require 'torch'   -- torch
 require 'xlua'    -- xlua provides useful tools, like progress bars
 require 'optim'   -- an optimization package, for online and batch methods
+require 'csvigo'  -- package to save to csv
 
 ----------------------------------------------------------------------
 print '==> defining test procedure'
+
+-- results contain an index and the predicted class for that test sample
+results = torch.zeros(testData:size(), 2)
+for i=1, testData:size() do
+   results[i][1] = i
+end
+
+function argmax(x)
+   m = x:max()
+   for i=1, (#x)[1] do
+      if x[i] == m then
+         return i
+      end
+   end
+end
 
 -- test function
 function test()
@@ -42,6 +58,7 @@ function test()
       local pred = model:forward(input)
       -- print("\n" .. target .. "\n")
       confusion:add(pred, target)
+      results[t][2] = argmax(pred)
    end
 
    -- timing
@@ -68,3 +85,10 @@ function test()
    -- next iteration:
    confusion:zero()
 end
+
+
+function save()
+   csvigo.save{path="out.csv", data=results:totable(), mode='raw'}
+end
+
+
