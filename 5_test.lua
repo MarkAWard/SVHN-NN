@@ -8,7 +8,6 @@
 require 'torch'   -- torch
 require 'xlua'    -- xlua provides useful tools, like progress bars
 require 'optim'   -- an optimization package, for online and batch methods
-require 'csvigo'  -- package to save to csv
 
 ----------------------------------------------------------------------
 print '==> defining test procedure'
@@ -88,7 +87,11 @@ end
 
 
 function save()
-   csvigo.save{path="out.csv", data=results:totable(), mode='raw'}
+   f = io.open("outfile.csv", "w")
+   f:write("id,Prediction\n")
+   for i = 1,testData:size() do
+      f:write(results[i][1] .. "," .. results[i][2] .. "\n")
+   f:close()
 end
 
 
