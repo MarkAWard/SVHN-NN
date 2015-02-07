@@ -87,10 +87,11 @@ end
 
 
 function save()
-   f = io.open("outfile.csv", "w")
+   f = io.open(paths.concat(opt.save, "outfile.csv"), "w")
    f:write("id,Prediction\n")
    for i = 1,testData:size() do
       f:write(results[i][1] .. "," .. results[i][2] .. "\n")
+   end
    f:close()
 end
 
