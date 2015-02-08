@@ -75,7 +75,7 @@ elseif opt.model == 'mlp' then
 elseif opt.model == 'convnet' then
 
    if opt.type == 'cuda' then
-      -- a typical modern convolution network (conv+relu+pool)
+      -- a typical modern convolution network (conv+relU+pool)
       model = nn.Sequential()
 
       -- stage 1 : filter bank -> squashing -> L2 pooling -> normalization
@@ -126,6 +126,37 @@ elseif opt.model == 'convnet' then
       model:add(nn.Tanh())
       model:add(nn.Linear(nstates[3], noutputs))
    end
+elseif opt.model == "deep" then
+
+   model = nn.Sequential()
+
+   -- 3x32x32 -> 64x30x30
+   model:add(nn.SpatialConvolutionMM(3, 64, 3, 3))
+   model:add(nn.ReLU())
+   -- 64x30x30 -> 64x28x28
+   model:add(nn.SpatialConvolutionMM(64, 64, 3, 3))
+   model:add(nn.ReLU())
+   -- 64x28x28 -> 64x9x9
+   model:add(nn.SpatialMaxPooling(3,3))
+
+   -- 64x9x9 -> 128x7x7
+   model:add(nn.SpatialConvolutionMM(64, 128, 3, 3))
+   model:add(nn.ReLU())
+   -- 128x7x7 -> 256x6x6
+   model:add(nn.SpatialConvolutionMM(128, 256, 2, 2))
+   model:add(nn.ReLU())
+   -- 256x6x6 -> 256x3x3
+   model:add(nn.SpatialMaxPooling(2,2))
+   model:add(nn.Dropout(0.5))
+
+   -- 256x3x3 -> 2304
+   model:add(nn.Reshape(256*3*3))
+   -- 2304 -> 1024
+   model:add(nn.Linear(256*3*3, 1024))
+   model:add(nn.ReLU())
+   -- 1024 -> 10
+   model:add(nn.Linear(1024, 10))
+
 else
 
    error('unknown -model')
