@@ -29,6 +29,7 @@ if not opt then
    cmd:text('Options:')
    cmd:option('-size', 'small', 'how many samples do we load: small | full | extra')
    cmd:option('-visualize', true, 'visualize input data and weights during training')
+   cmd:option('-validationSplit', 80, 'The percentage(%) of the training set to be used as the validation set')
    cmd:text()
    opt = cmd:parse(arg or {})
 end
@@ -84,6 +85,11 @@ elseif opt.size == 'small' then
    tesize = 2000
 end
 
+shuffleIndices = torch.randperm(trsize)
+endValset      = trsize
+trsize         = trsize*opt.validationSplit/100
+startValset    = trsize+1
+valSize 	   = endValset - startValset + 1
 ----------------------------------------------------------------------
 print '==> loading dataset'
 
@@ -96,10 +102,50 @@ print '==> loading dataset'
 -- height and width of the samples.
 
 loaded = torch.load(train_file,'ascii')
+allTrainX = loaded.X:transpose(3,4)
+
+-- retrieving the dimensions of X and changing the first attribute (no. of rows) to be 
+-- the corresponding one we want for the size of the training set.
+sizeForTrain    = allTrainX:size()
+sizeForTrain[1] = trsize
+trainX          = torch.zeros(sizeForTrain)
+-- Similarly we do for the validation set.
+sizeForVal      = allTrainX:size()
+sizeForVal[1]   = valSize
+valX            = torch.zeros(sizeForVal)
+
+-- Populating the trainX Tensor with the shuffled training data, 
+for i =1, trsize do
+	trainX[i] = allTrainX[ shuffleIndices[i] ]
+end
+-- and for the rest of the indexes of the shuffled data we populate the valX tensor.
+for i=1, valSize do
+	valX[i]   = allTrainX[ shuffleIndices[i+trsize] ];
+end
+
+-- Populating the trainY Tensor with the shuffled training labels,
+allTrainY = loaded.y[1]
+trainY    = torch.zeros(trsize)
+valY      = torch.zeros(valSize)
+for i =1, trsize do
+	trainY[i] = allTrainY[ shuffleIndices[i] ]
+end
+-- and for the rest of the indexes of the shuffled data we populate the valY tensor.
+for i=1,valSize do
+	valY[i]   = allTrainY[ shuffleIndices[i+trsize] ];
+end
+
+-- Finally creating the trainData and valData data structures. 
 trainData = {
-   data = loaded.X:transpose(3,4),
-   labels = loaded.y[1],
-   size = function() return trsize end
+   data   = trainX,
+   labels = trainY,
+   -- that's the new size of the training set without the validation data.
+   size   = function() return trsize end 
+}
+valData = {
+   data   = valX,
+   labels = valY,
+   size   = function() return valSize end
 }
 
 -- If extra data is used, we load the extra file, and then
@@ -143,7 +189,8 @@ print '==> preprocessing data'
 -- for simplicity (float(),double(),cuda(),...):
 
 trainData.data = trainData.data:float()
-testData.data = testData.data:float()
+valData.data   = valData.data:float()
+testData.data  = testData.data:float()
 
 -- We now preprocess the data. Preprocessing is crucial
 -- when applying pretty much any kind of machine learning algorithm.
@@ -163,8 +210,11 @@ print '==> preprocessing data: colorspace RGB -> YUV'
 for i = 1,trainData:size() do
    trainData.data[i] = image.rgb2yuv(trainData.data[i])
 end
+for i = 1,valData:size() do
+   valData.data[i]   = image.rgb2yuv(valData.data[i])
+end
 for i = 1,testData:size() do
-   testData.data[i] = image.rgb2yuv(testData.data[i])
+   testData.data[i]  = image.rgb2yuv(testData.data[i])
 end
 
 -- Name channels for convenience
@@ -177,6 +227,17 @@ channels = {'y','u','v'}
 print '==> preprocessing data: normalize each feature (channel) globally'
 mean = {}
 std = {}
+
+-- first normalizing the validation data so we later normalize the test data with the 
+-- statistics from the training data
+for i,channel in ipairs(channels) do
+   -- normalize each channel globally:
+   mean[i] = valData.data[{ {},i,{},{} }]:mean()
+   std[i]  = valData.data[{ {},i,{},{} }]:std()
+   valData.data[{ {},i,{},{} }]:add(-mean[i])
+   valData.data[{ {},i,{},{} }]:div(std[i])
+end
+
 for i,channel in ipairs(channels) do
    -- normalize each channel globally:
    mean[i] = trainData.data[{ {},i,{},{} }]:mean()
@@ -207,6 +268,9 @@ for c in ipairs(channels) do
    for i = 1,trainData:size() do
       trainData.data[{ i,{c},{},{} }] = normalization:forward(trainData.data[{ i,{c},{},{} }])
    end
+   for i = 1,valData:size() do
+      valData.data[{ i,{c},{},{} }] = normalization:forward(valData.data[{ i,{c},{},{} }])
+   end
    for i = 1,testData:size() do
       testData.data[{ i,{c},{},{} }] = normalization:forward(testData.data[{ i,{c},{},{} }])
    end
@@ -222,15 +286,27 @@ for i,channel in ipairs(channels) do
    trainMean = trainData.data[{ {},i }]:mean()
    trainStd = trainData.data[{ {},i }]:std()
 
+   valMean = valData.data[{ {},i }]:mean()
+   valStd  = valData.data[{ {},i }]:std()
+
    testMean = testData.data[{ {},i }]:mean()
    testStd = testData.data[{ {},i }]:std()
 
    print('training data, '..channel..'-channel, mean: ' .. trainMean)
    print('training data, '..channel..'-channel, standard deviation: ' .. trainStd)
 
+   print('validation data, '..channel..'-channel, mean: ' .. valMean)
+   print('validation data, '..channel..'-channel, standard deviation: ' .. valStd)
+
    print('test data, '..channel..'-channel, mean: ' .. testMean)
    print('test data, '..channel..'-channel, standard deviation: ' .. testStd)
 end
+
+
+-- we are going to use a sample of the training set for validation purposes, 
+-- so at this point where the data sets are well formed, we are going to tweak them.
+
+
 
 ----------------------------------------------------------------------
 -- print '==> visualizing data'

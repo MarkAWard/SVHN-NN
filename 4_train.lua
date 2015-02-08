@@ -58,6 +58,7 @@ confusion = optim.ConfusionMatrix(classes)
 
 -- Log results to files
 trainLogger = optim.Logger(paths.concat(opt.save, 'train.log'))
+valLogger = optim.Logger(paths.concat(opt.save, 'val.log'))
 testLogger = optim.Logger(paths.concat(opt.save, 'test.log'))
 
 -- Retrieve parameters and gradients:

@@ -27,9 +27,9 @@ cmd:text()
 cmd:text('Options:')
 -- global:
 cmd:option('-seed', 1, 'fixed input seed for repeatable experiments')
-cmd:option('-threads', 8, 'number of threads')
+cmd:option('-threads', 2, 'number of threads')
 -- data:
-cmd:option('-size', 'small', 'how many samples do we load: small | full | extra')
+cmd:option('-size', 'full', 'how many samples do we load: small | full | extra')
 -- model:
 cmd:option('-model', 'convnet', 'type of model to construct: linear | mlp | convnet')
 -- loss:
@@ -45,6 +45,7 @@ cmd:option('-momentum', 0, 'momentum (SGD only)')
 cmd:option('-t0', 1, 'start averaging at t0 (ASGD only), in nb of epochs')
 cmd:option('-maxIter', 2, 'maximum nb of iterations for CG and LBFGS')
 cmd:option('-type', 'double', 'type: double | float | cuda')
+cmd:option('-validationSplit', 80, 'The percentage(%) of the training set to be used as the validation set')
 cmd:text()
 opt = cmd:parse(arg or {})
 
@@ -67,12 +68,22 @@ dofile '1_data.lua'
 dofile '2_model.lua'
 dofile '3_loss.lua'
 dofile '4_train.lua'
+dofile '4+_val.lua'
 dofile '5_test.lua'
 
 ----------------------------------------------------------------------
 print '==> training!'
 
---while true do
-   train()
-   test()
---end
+maxValAcc = 0
+tmpValAcc = 0
+while true do
+	train()
+	tmpValAcc = val();
+	--if tmpValAcc < maxValAcc then --then we reached a local minimum
+--		break
+	--end
+	maxValAcc = tmpValAcc;
+end
+
+print '==> testing!'
+test()
